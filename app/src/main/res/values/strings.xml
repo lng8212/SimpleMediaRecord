@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">SimpleMediaRecord</string>
+    <string name="notif_recording_in_progress">Recording in progress</string>
+    <string name="notif_recording_paused">Recording is paused</string>
+    <string name="notif_action_pause">Pause</string>
+    <string name="notif_action_resume">Resume</string>
+    <string name="notif_action_stop">Stop</string>
+    <string name="btn_audio_settings_desc">Audio Settings</string>
+    <string name="btn_rec_stop_desc">Stop</string>
+    <string name="permissions_rationale">The app needs audio recording permission to work. In addition, the notification permission is needed to notify you if a recording is continuing in background after you left the app, or if an ongoing recording was stopped due to running out of battery or storage.</string>
+    <string name="permissions_rationale_grant_in_settings">%1$s\n\nYou need to grant the permissions manually in the Settings.</string>
+</resources>
