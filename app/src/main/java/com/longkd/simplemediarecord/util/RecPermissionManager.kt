@@ -5,12 +5,13 @@ import android.os.Build
 import androidx.fragment.app.FragmentActivity
 import com.longkd.simplemediarecord.R
 import com.permissionx.guolindev.PermissionX
+import dagger.hilt.android.scopes.ActivityScoped
 import dagger.hilt.android.scopes.FragmentScoped
 import kotlinx.coroutines.suspendCancellableCoroutine
 import javax.inject.Inject
 import kotlin.coroutines.resume
 
-@FragmentScoped
+@ActivityScoped
 class RecPermissionManager @Inject constructor() {
 
     suspend fun checkOrRequestRecordingPermission(

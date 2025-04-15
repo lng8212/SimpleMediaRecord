@@ -1,24 +1,15 @@
 package com.longkd.simplemediarecord.playback
 
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
-import com.longkd.simplemediarecord.playback.receiver.BluetoothDeviceReceiver
-import com.longkd.simplemediarecord.playback.receiver.HeadsetBroadcastReceiver
 
-class AudioDeviceManager(private val context: Context) {
+class AudioDeviceManager(context: Context) {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var onDeviceChangedListener: ((String) -> Unit)? = null
-    private var headsetReceiver: HeadsetBroadcastReceiver? = null
-    private var bluetoothReceiver: BluetoothDeviceReceiver? = null
 
-    // For devices running Android 6.0 (API 23) and above
     private val audioDeviceCallback =
         object : AudioDeviceCallback() {
             override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
@@ -33,7 +24,6 @@ class AudioDeviceManager(private val context: Context) {
         }
 
     init {
-        registerReceivers()
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
     }
 
@@ -47,10 +37,12 @@ class AudioDeviceManager(private val context: Context) {
                 routeAudioToHeadset()
                 onDeviceChangedListener?.invoke("HEADSET")
             }
+
             isBluetoothDeviceConnected() -> {
                 routeAudioToBluetooth()
                 onDeviceChangedListener?.invoke("BLUETOOTH")
             }
+
             else -> {
                 routeAudioToSpeaker()
                 onDeviceChangedListener?.invoke("SPEAKER")
@@ -63,7 +55,6 @@ class AudioDeviceManager(private val context: Context) {
     }
 
     fun release() {
-        unregisterReceivers()
         audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
     }
 
@@ -91,7 +82,6 @@ class AudioDeviceManager(private val context: Context) {
 
     private fun routeAudioToBluetooth() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Use communication device API for Android 12+
             val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
             val bluetoothDevice = devices.firstOrNull {
                 it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
@@ -102,7 +92,6 @@ class AudioDeviceManager(private val context: Context) {
                 audioManager.setCommunicationDevice(device)
             }
         } else {
-            // For older Android versions
             @Suppress("DEPRECATION")
             audioManager.isBluetoothScoOn = true
 
@@ -114,7 +103,6 @@ class AudioDeviceManager(private val context: Context) {
 
     private fun routeAudioToSpeaker() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Use communication device API for Android 12+
             val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
             val speakerDevice = devices.firstOrNull {
                 it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
@@ -124,7 +112,6 @@ class AudioDeviceManager(private val context: Context) {
                 audioManager.setCommunicationDevice(device)
             }
         } else {
-            // For older Android versions
             @Suppress("DEPRECATION")
             audioManager.isSpeakerphoneOn = true
 
@@ -152,49 +139,5 @@ class AudioDeviceManager(private val context: Context) {
 
     private fun getConnectedAudioDevices(): List<AudioDeviceInfo> {
         return audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).toList()
-    }
-
-    private fun registerReceivers() {
-        // Register headset connection receiver
-        headsetReceiver = HeadsetBroadcastReceiver { isConnected ->
-            if (isConnected) {
-                routeAudioToHeadset()
-                onDeviceChangedListener?.invoke("HEADSET")
-            } else {
-                if (isBluetoothDeviceConnected()) {
-                    routeAudioToBluetooth()
-                } else {
-                    routeAudioToSpeaker()
-                }
-                onDeviceChangedListener?.invoke("SPEAKER")
-            }
-        }
-
-        // Register bluetooth connection receiver
-        bluetoothReceiver = BluetoothDeviceReceiver { isConnected ->
-            if (isConnected && !isHeadphonesConnected()) {
-                routeAudioToBluetooth()
-                onDeviceChangedListener?.invoke("BLUETOOTH")
-            }
-        }
-
-        context.registerReceiver(
-            headsetReceiver,
-            IntentFilter(Intent.ACTION_HEADSET_PLUG)
-        )
-
-        context.registerReceiver(
-            bluetoothReceiver,
-            IntentFilter(BluetoothDevice.ACTION_ACL_CONNECTED).apply {
-                addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
-            }
-        )
-    }
-
-    private fun unregisterReceivers() {
-        headsetReceiver?.let { context.unregisterReceiver(it) }
-        bluetoothReceiver?.let { context.unregisterReceiver(it) }
-        headsetReceiver = null
-        bluetoothReceiver = null
     }
 }
