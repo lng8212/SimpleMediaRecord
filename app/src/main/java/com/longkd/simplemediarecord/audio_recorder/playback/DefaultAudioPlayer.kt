@@ -1,24 +1,23 @@
-package com.longkd.simplemediarecord.playback
+package com.longkd.simplemediarecord.audio_recorder.playback
 
-import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioDeviceHandler
+import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioFocusHandler
+import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioPlayer
+import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioPlayerCallback
 import javax.inject.Inject
 
-
-class AudioPlayerController @Inject constructor(@ApplicationContext private val context: Context) {
+class DefaultAudioPlayer @Inject constructor(
+    private val audioFocusHandler: AudioFocusHandler,
+    private val audioDeviceHandler: AudioDeviceHandler
+) : AudioPlayer {
     private var mediaPlayer: MediaPlayer? = null
-    private val audioFocusManager = AudioFocusManager(context)
-    private val audioDeviceManager = AudioDeviceManager(context)
-
-    private var audioDeviceListener: ((String) -> Unit)? = null
     private var completionListener: (() -> Unit)? = null
 
     init {
-        setupAudioDeviceListener()
-        audioFocusManager.setOnAudioFocusChangeListener { focusChange ->
+        audioFocusHandler.setOnAudioFocusChangeListener { focusChange ->
             when (focusChange) {
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> pause()
                 AudioManager.AUDIOFOCUS_LOSS -> stop()
@@ -27,12 +26,7 @@ class AudioPlayerController @Inject constructor(@ApplicationContext private val 
         }
     }
 
-    interface OnPreparedListener {
-        fun onPrepared(duration: Int)
-        fun onError(error: String)
-    }
-
-    fun loadAudio(filePath: String, listener: OnPreparedListener) {
+    override fun loadAudio(filePath: String, listener: AudioPlayerCallback) {
         try {
             releaseMediaPlayer()
             mediaPlayer = MediaPlayer().apply {
@@ -46,7 +40,7 @@ class AudioPlayerController @Inject constructor(@ApplicationContext private val 
 
                 setOnPreparedListener {
                     listener.onPrepared(duration)
-                    audioDeviceManager.setupAudioRouting()
+                    audioDeviceHandler.setupAudioRouting()
                 }
 
                 setOnErrorListener { _, what, extra ->
@@ -65,54 +59,43 @@ class AudioPlayerController @Inject constructor(@ApplicationContext private val 
         }
     }
 
-    fun play() {
-        if (audioFocusManager.requestAudioFocus()) {
+    override fun play() {
+        if (audioFocusHandler.requestAudioFocus()) {
             mediaPlayer?.start()
-            audioDeviceManager.setupAudioRouting()
+            audioDeviceHandler.setupAudioRouting()
         }
     }
 
-    fun pause() {
+    override fun pause() {
         mediaPlayer?.pause()
     }
 
-    fun stop() {
+    override fun stop() {
         mediaPlayer?.stop()
-        audioFocusManager.abandonAudioFocus()
+        audioFocusHandler.abandonAudioFocus()
     }
 
-    @Suppress("unused")
-    fun seekTo(position: Int) {
+    override fun seekTo(position: Int) {
         mediaPlayer?.seekTo(position)
     }
 
-    fun getCurrentPosition(): Int {
+    override fun getCurrentPosition(): Int {
         return mediaPlayer?.currentPosition ?: 0
     }
 
-    fun getDuration(): Int {
+    override fun getDuration(): Int {
         return mediaPlayer?.duration ?: 0
     }
 
-    fun setOnCompletionListener(listener: () -> Unit) {
+    override fun setOnCompletionListener(listener: () -> Unit) {
         completionListener = listener
     }
 
-    fun setOnAudioDeviceChangedListener(listener: (String) -> Unit) {
-        audioDeviceListener = listener
-    }
-
-    private fun setupAudioDeviceListener() {
-        audioDeviceManager.setOnDeviceChangedListener { deviceType ->
-            audioDeviceListener?.invoke(deviceType)
-        }
-    }
-
-    fun release() {
+    override fun release() {
         stop()
         releaseMediaPlayer()
-        audioDeviceManager.release()
-        audioFocusManager.abandonAudioFocus()
+        audioDeviceHandler.release()
+        audioFocusHandler.release()
     }
 
     private fun releaseMediaPlayer() {

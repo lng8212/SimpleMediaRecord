@@ -1,14 +1,16 @@
-package com.longkd.simplemediarecord.playback
+package com.longkd.simplemediarecord.audio_recorder.playback
 
 import android.content.Context
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioDeviceHandler
 
-class AudioDeviceManager(context: Context) {
+class DefaultAudioDeviceHandler(context: Context) : AudioDeviceHandler {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var onDeviceChangedListener: ((String) -> Unit)? = null
+    private var currentDevice: String = "SPEAKER"
 
     private val audioDeviceCallback =
         object : AudioDeviceCallback() {
@@ -27,34 +29,39 @@ class AudioDeviceManager(context: Context) {
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
     }
 
-    fun setupAudioRouting() {
+    override fun setupAudioRouting() {
         updateAudioRouting()
     }
+
+    override fun getCurrentDevice(): String = currentDevice
 
     private fun updateAudioRouting() {
         when {
             isHeadphonesConnected() -> {
                 routeAudioToHeadset()
-                onDeviceChangedListener?.invoke("HEADSET")
+                currentDevice = "HEADSET"
+                onDeviceChangedListener?.invoke(currentDevice)
             }
 
             isBluetoothDeviceConnected() -> {
                 routeAudioToBluetooth()
-                onDeviceChangedListener?.invoke("BLUETOOTH")
+                currentDevice = "BLUETOOTH"
+                onDeviceChangedListener?.invoke(currentDevice)
             }
 
             else -> {
                 routeAudioToSpeaker()
-                onDeviceChangedListener?.invoke("SPEAKER")
+                currentDevice = "SPEAKER"
+                onDeviceChangedListener?.invoke(currentDevice)
             }
         }
     }
 
-    fun setOnDeviceChangedListener(listener: (String) -> Unit) {
+    override fun setOnDeviceChangedListener(listener: (String) -> Unit) {
         onDeviceChangedListener = listener
     }
 
-    fun release() {
+    override fun release() {
         audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
     }
 
@@ -98,7 +105,6 @@ class AudioDeviceManager(context: Context) {
             @Suppress("DEPRECATION")
             audioManager.startBluetoothSco()
         }
-
     }
 
     private fun routeAudioToSpeaker() {
@@ -118,7 +124,6 @@ class AudioDeviceManager(context: Context) {
             @Suppress("DEPRECATION")
             audioManager.isBluetoothScoOn = false
         }
-
     }
 
     private fun isHeadphonesConnected(): Boolean {

@@ -2,8 +2,8 @@ package com.longkd.simplemediarecord
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.longkd.simplemediarecord.playback.AudioPlayerController
-import com.longkd.simplemediarecord.recorder.MediaRecorderController
+import com.longkd.simplemediarecord.audio_recorder.playback.AudioPlayerController
+import com.longkd.simplemediarecord.audio_recorder.recorder.AudioRecorderController
 import com.longkd.simplemediarecord.util.millisecondsToStopwatchString
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -13,38 +13,39 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import javax.inject.Named
 
 @HiltViewModel
 class MainActivityViewModel @Inject constructor(
-    private val mediaRecorderController: MediaRecorderController,
+    private val audioRecorderController: AudioRecorderController,
     private val audioPlayerController: AudioPlayerController,
-    private val audioFilePath: String
+    @Named("audioFilePath") private val audioFilePath: String
 ) : ViewModel() {
 
-    val recorderUiState = mediaRecorderController.state.map {
+    val recorderUiState = audioRecorderController.state.map {
         mapState(it)
+    }
+
+    val timerText = audioRecorderController.timer.map { milliseconds ->
+        millisecondsToStopwatchString(milliseconds)
     }
 
     private val _playbackUiState = MutableStateFlow(PlaybackUiState())
     val playbackUiState = _playbackUiState.asStateFlow()
 
+    private var progressJob: Job? = null
+
     init {
         updateDeviceChange()
     }
 
-    private var progressJob: Job? = null
-
-    private fun mapState(state: MediaRecorderController.State): RecorderUiState {
+    private fun mapState(state: AudioRecorderController.State): RecorderUiState {
         return when (state) {
-            MediaRecorderController.State.PREPARING -> RecorderUiState.Idle
-            MediaRecorderController.State.RECORDING -> RecorderUiState.Recording
-            MediaRecorderController.State.PAUSED -> RecorderUiState.Paused
-            MediaRecorderController.State.ERROR -> RecorderUiState.Idle
+            AudioRecorderController.State.PREPARING -> RecorderUiState.Idle
+            AudioRecorderController.State.RECORDING -> RecorderUiState.Recording
+            AudioRecorderController.State.PAUSED -> RecorderUiState.Paused
+            AudioRecorderController.State.ERROR -> RecorderUiState.Idle
         }
-    }
-
-    val timerText = mediaRecorderController.timer.map { milliseconds ->
-        millisecondsToStopwatchString(milliseconds)
     }
 
     private fun updateDeviceChange() {
@@ -80,7 +81,6 @@ class MainActivityViewModel @Inject constructor(
             override fun onError(error: String) {
                 _playbackUiState.value = _playbackUiState.value.copy(error = error)
             }
-
         })
 
         audioPlayerController.setOnCompletionListener {
@@ -94,7 +94,6 @@ class MainActivityViewModel @Inject constructor(
     private fun startUpdatingProgress(duration: Long) {
         progressJob?.cancel()
         progressJob = viewModelScope.launch {
-            val duration = duration
             val delayMillis = (duration / 60).coerceIn(250, 1000)
 
             while (_playbackUiState.value.isPlaying == true) {
@@ -107,26 +106,27 @@ class MainActivityViewModel @Inject constructor(
         }
     }
 
-    fun getCurrentState() = mapState(mediaRecorderController.getCurrentState())
+    fun getCurrentState() = mapState(audioRecorderController.getCurrentState())
 
     fun onStartRecording() {
         audioPlayerController.stop()
-        mediaRecorderController.start()
+        audioRecorderController.start()
     }
 
     fun onPauseOrResumeRecording() {
-        mediaRecorderController.toggleRecPause()
+        audioRecorderController.toggleRecPause()
     }
 
     fun onStopRecording() {
         viewModelScope.launch {
-            mediaRecorderController.stop()
+            audioRecorderController.stop()
             loadAudioFile()
         }
     }
 
     override fun onCleared() {
         audioPlayerController.release()
+        audioRecorderController.release()
         super.onCleared()
     }
 }
