@@ -2,9 +2,6 @@ package com.longkd.simplemediarecord.recorder
 
 import android.content.Context
 import android.util.Log
-import com.longkd.simplemediarecord.recorder.receiver.InComingCallBroadcastReceiver
-import com.longkd.simplemediarecord.recorder.receiver.LowBatteryBroadcastReceiver
-import com.longkd.simplemediarecord.recorder.receiver.LowStorageBroadcastReceiver
 import com.longkd.simplemediarecord.util.timer.Stopwatch
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.coroutineScope
@@ -15,7 +12,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class MediaRecorderController @Inject constructor(@ApplicationContext private val context: Context) {
+class MediaRecorderController @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val audioFilePath: String,
+    private val callStateObserver: CallStateObserver
+) {
 
     enum class State {
         PREPARING,
@@ -37,44 +38,43 @@ class MediaRecorderController @Inject constructor(@ApplicationContext private va
     val timer: StateFlow<Long>
         get() = _timer
 
-    private lateinit var lowBatteryBroadcastReceiver: LowBatteryBroadcastReceiver
-    private lateinit var lowStorageBroadcastReceiver: LowStorageBroadcastReceiver
-    private lateinit var callBroadcastReceiver: InComingCallBroadcastReceiver
-
     fun getCurrentState() = _state.value
 
-    fun initRecorder() {
-        stopwatch = Stopwatch()
-        stopwatch.setOnTickListener(object : Stopwatch.OnTickListener {
-            override fun onTick(stopwatch: Stopwatch) {
-                _timer.value = stopwatch.elapsedTime
+    fun start() {
+        if (!::stopwatch.isInitialized) {
+            stopwatch = Stopwatch()
+            stopwatch.setOnTickListener(object : Stopwatch.OnTickListener {
+                override fun onTick(stopwatch: Stopwatch) {
+                    _timer.value = stopwatch.elapsedTime
+                }
+            })
+        }
+
+        callStateObserver.startListening {
+            if (getCurrentState() == State.RECORDING) {
+                pause()
             }
-        })
+        }
+
         try {
-            recorder = MediaRecorderInitializer(context = context)
+            recorder = MediaRecorderInitializer(context = context, audioFilePath = audioFilePath)
         } catch (e: IOException) {
             Log.e("Recorder", "prepare() failed", e)
             _state.value = State.ERROR
         }
-    }
 
-    fun start() {
         recorder.start()
         _state.value = State.RECORDING
         stopwatch.start()
     }
 
-    fun release() {
-        context.unregisterReceiver(callBroadcastReceiver)
-        context.unregisterReceiver(lowBatteryBroadcastReceiver)
-        context.unregisterReceiver(lowStorageBroadcastReceiver)
-    }
-
     suspend fun stop() {
         stopwatch.stop()
+        callStateObserver.stopListening()
         coroutineScope {
             recorder.stop()
         }
+        _state.value = State.PREPARING
     }
 
     private fun pause() {

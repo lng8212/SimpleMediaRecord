@@ -3,13 +3,14 @@ package com.longkd.simplemediarecord.recorder
 import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
-import java.io.IOException
 
-class MediaRecorderInitializer @Throws(IOException::class) constructor(
+class MediaRecorderInitializer(
     context: Context,
+    audioFilePath: String
 ) : AudioRecorder {
 
-    val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    @Suppress("DEPRECATION")
+    private val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         MediaRecorder(context)
     } else {
         MediaRecorder()
@@ -17,7 +18,7 @@ class MediaRecorderInitializer @Throws(IOException::class) constructor(
         setAudioSource(MediaRecorder.AudioSource.DEFAULT)
         setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
         setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
-        setOutputFile(context.filesDir.absolutePath + "/demo.3gp")
+        setOutputFile(audioFilePath)
 
         prepare()
     }
