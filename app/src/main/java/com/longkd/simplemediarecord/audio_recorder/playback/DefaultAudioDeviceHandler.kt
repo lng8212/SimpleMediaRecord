@@ -4,11 +4,12 @@ import android.content.Context
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.MediaRouter
 import android.os.Build
 import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioDeviceHandler
 import com.longkd.simplemediarecord.audio_recorder.playback.model.AudioDevicePair
 
-class DefaultAudioDeviceHandler(context: Context) : AudioDeviceHandler {
+class DefaultAudioDeviceHandler(private val context: Context) : AudioDeviceHandler {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
     private var onDeviceChangedListener: ((AudioDevicePair) -> Unit)? = null
@@ -104,7 +105,7 @@ class DefaultAudioDeviceHandler(context: Context) : AudioDeviceHandler {
                 AudioDeviceInfo.TYPE_WIRED_HEADSET,
                 AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
                 AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-                AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> true
+                AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> true
 
                 else -> false
             }
@@ -112,7 +113,27 @@ class DefaultAudioDeviceHandler(context: Context) : AudioDeviceHandler {
 
     private fun routeAudioToDevice(device: AudioDeviceInfo) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            audioManager.setCommunicationDevice(device)
+            if (device.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP) {
+                val mediaRouter =
+                    context.getSystemService(Context.MEDIA_ROUTER_SERVICE) as MediaRouter
+                val routeTypes = MediaRouter.ROUTE_TYPE_LIVE_AUDIO
+                val deviceName = device.productName?.toString() ?: ""
+                for (i in 0 until mediaRouter.routeCount) {
+                    val route = mediaRouter.getRouteAt(i)
+                    if (route.name.contains(deviceName, ignoreCase = true) ||
+                        (deviceName.isNotEmpty() && route.description?.contains(
+                            deviceName,
+                            ignoreCase = true
+                        ) == true)
+                    ) {
+                        mediaRouter.selectRoute(routeTypes, route)
+                        break
+                    }
+                }
+            } else {
+                // For all non-A2DP devices, use setCommunicationDevice
+                audioManager.setCommunicationDevice(device)
+            }
         } else {
             @Suppress("DEPRECATION")
             when {

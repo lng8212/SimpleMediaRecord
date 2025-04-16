@@ -96,7 +96,7 @@ class MainActivity : AppCompatActivity() {
             launch {
                 viewModel.availableAudioDevices.collectLatest { devices ->
                     spAdapter.clear()
-                    spAdapter.addAll(devices.map { it.deviceName })
+                    spAdapter.addAll(devices.map { it.deviceName + "(${it.deviceInfo.type})" })
                     spAdapter.notifyDataSetChanged()
                     val currentId = viewModel.getCurrentDevice()?.id
                     val selectedIndex = devices.indexOfFirst { it.id == currentId }
