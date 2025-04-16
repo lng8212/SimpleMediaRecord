@@ -2,49 +2,68 @@ package com.longkd.simplemediarecord
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.longkd.simplemediarecord.playback.AudioPlayerController
-import com.longkd.simplemediarecord.recorder.MediaRecorderController
+import com.longkd.simplemediarecord.audio_recorder.playback.AudioPlayerController
+import com.longkd.simplemediarecord.audio_recorder.playback.model.AudioDevicePair
+import com.longkd.simplemediarecord.audio_recorder.recorder.AudioRecorderController
 import com.longkd.simplemediarecord.util.millisecondsToStopwatchString
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import javax.inject.Named
 
 @HiltViewModel
 class MainActivityViewModel @Inject constructor(
-    private val mediaRecorderController: MediaRecorderController,
+    private val audioRecorderController: AudioRecorderController,
     private val audioPlayerController: AudioPlayerController,
-    private val audioFilePath: String
+    @Named("audioFilePath") private val audioFilePath: String
 ) : ViewModel() {
 
-    val recorderUiState = mediaRecorderController.state.map {
+    val recorderUiState = audioRecorderController.state.map {
         mapState(it)
+    }
+
+    val timerText = audioRecorderController.timer.map { milliseconds ->
+        millisecondsToStopwatchString(milliseconds)
     }
 
     private val _playbackUiState = MutableStateFlow(PlaybackUiState())
     val playbackUiState = _playbackUiState.asStateFlow()
 
-    init {
-        updateDeviceChange()
-    }
+    private val _availableAudioDevices = MutableStateFlow<List<AudioDevicePair>>(emptyList())
+    val availableAudioDevices: StateFlow<List<AudioDevicePair>> = _availableAudioDevices
 
     private var progressJob: Job? = null
 
-    private fun mapState(state: MediaRecorderController.State): RecorderUiState {
-        return when (state) {
-            MediaRecorderController.State.PREPARING -> RecorderUiState.Idle
-            MediaRecorderController.State.RECORDING -> RecorderUiState.Recording
-            MediaRecorderController.State.PAUSED -> RecorderUiState.Paused
-            MediaRecorderController.State.ERROR -> RecorderUiState.Idle
+    init {
+        updateDeviceChange()
+        updateListDeviceSelected()
+    }
+
+    fun updateListDeviceSelected() {
+        audioPlayerController.setOnDeviceListChangedListener {
+            _availableAudioDevices.value = it
         }
     }
 
-    val timerText = mediaRecorderController.timer.map { milliseconds ->
-        millisecondsToStopwatchString(milliseconds)
+    fun getCurrentDevice() = audioPlayerController.getCurrentDevice()
+
+    fun selectAudioDevice(deviceId: Int): Boolean {
+        return audioPlayerController.selectAudioDevice(deviceId)
+    }
+
+    private fun mapState(state: AudioRecorderController.State): RecorderUiState {
+        return when (state) {
+            AudioRecorderController.State.PREPARING -> RecorderUiState.Idle
+            AudioRecorderController.State.RECORDING -> RecorderUiState.Recording
+            AudioRecorderController.State.PAUSED -> RecorderUiState.Paused
+            AudioRecorderController.State.ERROR -> RecorderUiState.Idle
+        }
     }
 
     private fun updateDeviceChange() {
@@ -67,25 +86,28 @@ class MainActivityViewModel @Inject constructor(
     }
 
     private fun loadAudioFile() {
-        audioPlayerController.loadAudio(audioFilePath, object : AudioPlayerController.OnPreparedListener {
-            override fun onPrepared(duration: Int) {
-                _playbackUiState.value = _playbackUiState.value.copy(
-                    totalDuration = millisecondsToStopwatchString(duration.toLong()),
-                    currentPosition = millisecondsToStopwatchString(0L),
-                    isPlaying = false,
-                    isReady = true
-                )
-            }
+        audioPlayerController.loadAudio(
+            audioFilePath,
+            object : AudioPlayerController.OnPreparedListener {
+                override fun onPrepared(duration: Int) {
+                    _playbackUiState.value = _playbackUiState.value.copy(
+                        totalDuration = millisecondsToStopwatchString(duration.toLong()),
+                        currentPosition = millisecondsToStopwatchString(0L),
+                        currentProcessByPercent = 0,
+                        isPlaying = false,
+                        isReady = true
+                    )
+                }
 
-            override fun onError(error: String) {
-                _playbackUiState.value = _playbackUiState.value.copy(error = error)
-            }
-
-        })
+                override fun onError(error: String) {
+                    _playbackUiState.value = _playbackUiState.value.copy(error = error)
+                }
+            })
 
         audioPlayerController.setOnCompletionListener {
             _playbackUiState.value = _playbackUiState.value.copy(
                 currentPosition = millisecondsToStopwatchString(0L),
+                currentProcessByPercent = 0,
                 isPlaying = false
             )
         }
@@ -94,39 +116,40 @@ class MainActivityViewModel @Inject constructor(
     private fun startUpdatingProgress(duration: Long) {
         progressJob?.cancel()
         progressJob = viewModelScope.launch {
-            val duration = duration
-            val delayMillis = (duration / 60).coerceIn(250, 1000)
+            val delayMillis = (duration / 100).coerceIn(250, 1000)
 
             while (_playbackUiState.value.isPlaying == true) {
                 val currentPosition = audioPlayerController.getCurrentPosition()
                 _playbackUiState.value = _playbackUiState.value.copy(
-                    currentPosition = millisecondsToStopwatchString(currentPosition.toLong())
+                    currentPosition = millisecondsToStopwatchString(currentPosition.toLong()),
+                    currentProcessByPercent = (currentPosition * 100f / duration).toInt()
                 )
                 delay(delayMillis)
             }
         }
     }
 
-    fun getCurrentState() = mapState(mediaRecorderController.getCurrentState())
+    fun getCurrentState() = mapState(audioRecorderController.getCurrentState())
 
     fun onStartRecording() {
         audioPlayerController.stop()
-        mediaRecorderController.start()
+        audioRecorderController.start()
     }
 
     fun onPauseOrResumeRecording() {
-        mediaRecorderController.toggleRecPause()
+        audioRecorderController.toggleRecPause()
     }
 
     fun onStopRecording() {
         viewModelScope.launch {
-            mediaRecorderController.stop()
+            audioRecorderController.stop()
             loadAudioFile()
         }
     }
 
     override fun onCleared() {
         audioPlayerController.release()
+        audioRecorderController.release()
         super.onCleared()
     }
 }

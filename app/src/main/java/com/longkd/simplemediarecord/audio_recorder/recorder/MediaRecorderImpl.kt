@@ -1,10 +1,11 @@
-package com.longkd.simplemediarecord.recorder
+package com.longkd.simplemediarecord.audio_recorder.recorder
 
 import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
+import com.longkd.simplemediarecord.audio_recorder.recorder.itf.AudioRecorder
 
-class MediaRecorderInitializer(
+class MediaRecorderImpl(
     context: Context,
     audioFilePath: String
 ) : AudioRecorder {
@@ -39,6 +40,14 @@ class MediaRecorderInitializer(
         recorder.apply {
             stop()
             release()
+        }
+    }
+
+    override fun release() {
+        try {
+            recorder.release()
+        } catch (_: Exception) {
+            TODO()
         }
     }
 }

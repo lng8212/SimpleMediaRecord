@@ -1,4 +1,4 @@
-package com.longkd.simplemediarecord.recorder
+package com.longkd.simplemediarecord.audio_recorder.recorder
 
 import android.content.Context
 import android.os.Build
@@ -6,22 +6,22 @@ import android.telephony.PhoneStateListener
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
+import com.longkd.simplemediarecord.audio_recorder.recorder.itf.CallStateHandler
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
-class CallStateObserver @Inject constructor(
+class DefaultCallStateHandler @Inject constructor(
     @ApplicationContext private val context: Context
-) {
-
+) : CallStateHandler {
     private val telephonyManager =
         context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
 
     private var modernCallback: TelephonyCallback? = null
+
     @Suppress("DEPRECATION")
     private var legacyListener: PhoneStateListener? = null
 
-    fun startListening(onCallDetected: () -> Unit) {
-
+    override fun startListening(onCallDetected: () -> Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             modernCallback = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
                 override fun onCallStateChanged(state: Int) {
@@ -48,7 +48,7 @@ class CallStateObserver @Inject constructor(
         }
     }
 
-    fun stopListening() {
+    override fun stopListening() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             modernCallback?.let {
                 telephonyManager.unregisterTelephonyCallback(it)
@@ -57,5 +57,9 @@ class CallStateObserver @Inject constructor(
             @Suppress("DEPRECATION")
             telephonyManager.listen(legacyListener, PhoneStateListener.LISTEN_NONE)
         }
+    }
+
+    override fun release() {
+        stopListening()
     }
 }

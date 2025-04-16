@@ -1,12 +1,10 @@
 package com.longkd.simplemediarecord.util
 
 import android.Manifest
-import android.os.Build
 import androidx.fragment.app.FragmentActivity
 import com.longkd.simplemediarecord.R
 import com.permissionx.guolindev.PermissionX
 import dagger.hilt.android.scopes.ActivityScoped
-import dagger.hilt.android.scopes.FragmentScoped
 import kotlinx.coroutines.suspendCancellableCoroutine
 import javax.inject.Inject
 import kotlin.coroutines.resume
@@ -19,6 +17,7 @@ class RecPermissionManager @Inject constructor() {
     ): Boolean = suspendCancellableCoroutine {
         val permissionsToGet = mutableListOf(
             Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.READ_PHONE_STATE
         )
 
         PermissionX.init(activity)
