@@ -3,6 +3,8 @@ package com.longkd.simplemediarecord
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -10,8 +12,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.longkd.simplemediarecord.databinding.ActivityMainBinding
 import com.longkd.simplemediarecord.util.RecPermissionManager
-import com.longkd.simplemediarecord.util.calculateProgressPercent
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -23,6 +25,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
 
     private val viewModel: MainActivityViewModel by viewModels()
+
+    private lateinit var spAdapter: ArrayAdapter<String>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,14 +87,24 @@ class MainActivity : AppCompatActivity() {
                         } else clOutput.visibility = View.VISIBLE
                         tvCurrentTime.text = it.currentPosition
                         tvTotalTime.text = it.totalDuration
-                        tvDeviceStatus.text = "Playing through: ${it.device}"
                         btnPlayPause.setImageResource(if (it.isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
-                        binding.seekBar.progress =
-                            calculateProgressPercent(it.currentPosition, it.totalDuration)
+                        binding.seekBar.progress = it.currentProcessByPercent
                     }
                 }
             }
 
+            launch {
+                viewModel.availableAudioDevices.collectLatest { devices ->
+                    spAdapter.clear()
+                    spAdapter.addAll(devices.map { it.deviceName })
+                    spAdapter.notifyDataSetChanged()
+                    val currentId = viewModel.getCurrentDevice()?.id
+                    val selectedIndex = devices.indexOfFirst { it.id == currentId }
+                    if (selectedIndex != -1) {
+                        binding.spListDevices.setSelection(selectedIndex)
+                    }
+                }
+            }
         }
     }
 
@@ -100,6 +114,25 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupView() {
+        spAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item)
+        spAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spListDevices.apply {
+            adapter = spAdapter
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: AdapterView<*>?,
+                    view: View?,
+                    position: Int,
+                    id: Long
+                ) {
+                    val selectedId = viewModel.availableAudioDevices.value.getOrNull(position)?.id
+                    selectedId?.let { viewModel.selectAudioDevice(it) }
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) {}
+            }
+        }
+
         binding.seekBar.setOnTouchListener { _, _ -> true }
         binding.ivPlay.setOnClickListener {
             if (viewModel.getCurrentState() is RecorderUiState.Idle) {

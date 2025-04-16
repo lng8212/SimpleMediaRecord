@@ -3,12 +3,14 @@ package com.longkd.simplemediarecord
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.longkd.simplemediarecord.audio_recorder.playback.AudioPlayerController
+import com.longkd.simplemediarecord.audio_recorder.playback.model.AudioDevicePair
 import com.longkd.simplemediarecord.audio_recorder.recorder.AudioRecorderController
 import com.longkd.simplemediarecord.util.millisecondsToStopwatchString
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -33,10 +35,26 @@ class MainActivityViewModel @Inject constructor(
     private val _playbackUiState = MutableStateFlow(PlaybackUiState())
     val playbackUiState = _playbackUiState.asStateFlow()
 
+    private val _availableAudioDevices = MutableStateFlow<List<AudioDevicePair>>(emptyList())
+    val availableAudioDevices: StateFlow<List<AudioDevicePair>> = _availableAudioDevices
+
     private var progressJob: Job? = null
 
     init {
         updateDeviceChange()
+        updateListDeviceSelected()
+    }
+
+    fun updateListDeviceSelected() {
+        audioPlayerController.setOnDeviceListChangedListener {
+            _availableAudioDevices.value = it
+        }
+    }
+
+    fun getCurrentDevice() = audioPlayerController.getCurrentDevice()
+
+    fun selectAudioDevice(deviceId: Int): Boolean {
+        return audioPlayerController.selectAudioDevice(deviceId)
     }
 
     private fun mapState(state: AudioRecorderController.State): RecorderUiState {
@@ -68,24 +86,28 @@ class MainActivityViewModel @Inject constructor(
     }
 
     private fun loadAudioFile() {
-        audioPlayerController.loadAudio(audioFilePath, object : AudioPlayerController.OnPreparedListener {
-            override fun onPrepared(duration: Int) {
-                _playbackUiState.value = _playbackUiState.value.copy(
-                    totalDuration = millisecondsToStopwatchString(duration.toLong()),
-                    currentPosition = millisecondsToStopwatchString(0L),
-                    isPlaying = false,
-                    isReady = true
-                )
-            }
+        audioPlayerController.loadAudio(
+            audioFilePath,
+            object : AudioPlayerController.OnPreparedListener {
+                override fun onPrepared(duration: Int) {
+                    _playbackUiState.value = _playbackUiState.value.copy(
+                        totalDuration = millisecondsToStopwatchString(duration.toLong()),
+                        currentPosition = millisecondsToStopwatchString(0L),
+                        currentProcessByPercent = 0,
+                        isPlaying = false,
+                        isReady = true
+                    )
+                }
 
-            override fun onError(error: String) {
-                _playbackUiState.value = _playbackUiState.value.copy(error = error)
-            }
-        })
+                override fun onError(error: String) {
+                    _playbackUiState.value = _playbackUiState.value.copy(error = error)
+                }
+            })
 
         audioPlayerController.setOnCompletionListener {
             _playbackUiState.value = _playbackUiState.value.copy(
                 currentPosition = millisecondsToStopwatchString(0L),
+                currentProcessByPercent = 0,
                 isPlaying = false
             )
         }
@@ -94,12 +116,13 @@ class MainActivityViewModel @Inject constructor(
     private fun startUpdatingProgress(duration: Long) {
         progressJob?.cancel()
         progressJob = viewModelScope.launch {
-            val delayMillis = (duration / 60).coerceIn(250, 1000)
+            val delayMillis = (duration / 100).coerceIn(250, 1000)
 
             while (_playbackUiState.value.isPlaying == true) {
                 val currentPosition = audioPlayerController.getCurrentPosition()
                 _playbackUiState.value = _playbackUiState.value.copy(
-                    currentPosition = millisecondsToStopwatchString(currentPosition.toLong())
+                    currentPosition = millisecondsToStopwatchString(currentPosition.toLong()),
+                    currentProcessByPercent = (currentPosition * 100f / duration).toInt()
                 )
                 delay(delayMillis)
             }

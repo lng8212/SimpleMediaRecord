@@ -3,6 +3,7 @@ package com.longkd.simplemediarecord.audio_recorder.playback
 import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioDeviceHandler
 import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioPlayer
 import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioPlayerCallback
+import com.longkd.simplemediarecord.audio_recorder.playback.model.AudioDevicePair
 import javax.inject.Inject
 
 
@@ -10,7 +11,7 @@ class AudioPlayerController @Inject constructor(
     private val audioPlayer: AudioPlayer,
     private val audioDeviceHandler: AudioDeviceHandler
 ) {
-    private var audioDeviceListener: ((String) -> Unit)? = null
+    private var audioDeviceListener: ((AudioDevicePair) -> Unit)? = null
 
     init {
         setupAudioDeviceListener()
@@ -39,7 +40,7 @@ class AudioPlayerController @Inject constructor(
         audioPlayer.setOnCompletionListener(listener)
     }
 
-    fun setOnAudioDeviceChangedListener(listener: (String) -> Unit) {
+    fun setOnAudioDeviceChangedListener(listener: (AudioDevicePair) -> Unit) {
         audioDeviceListener = listener
     }
 
@@ -49,7 +50,23 @@ class AudioPlayerController @Inject constructor(
         }
     }
 
-    fun getCurrentDevice(): String = audioDeviceHandler.getCurrentDevice()
+    fun getCurrentDevice(): AudioDevicePair? = audioDeviceHandler.getCurrentDevice()
+
+    fun getAvailableOutputDevices(): List<AudioDevicePair> {
+        return audioDeviceHandler.getAvailableOutputDevices()
+    }
+
+    fun selectAudioDevice(deviceId: Int): Boolean {
+        return audioDeviceHandler.selectAudioDevice(deviceId)
+    }
+
+    fun setOnDeviceListChangedListener(listener: (List<AudioDevicePair>) -> Unit) {
+        audioDeviceHandler.setOnDeviceListChangedListener(listener)
+    }
+
+    fun resetDeviceSelection() {
+        audioDeviceHandler.resetDeviceSelection()
+    }
 
     fun release() {
         audioPlayer.release()

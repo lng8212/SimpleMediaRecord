@@ -33,7 +33,6 @@ object AudioPlaybackModule {
     @Provides
     @Singleton
     fun provideAudioPlayer(
-        @ApplicationContext context: Context,
         audioFocusHandler: AudioFocusHandler,
         audioDeviceHandler: AudioDeviceHandler
     ): AudioPlayer {

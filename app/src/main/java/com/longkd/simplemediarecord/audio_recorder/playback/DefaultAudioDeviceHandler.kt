@@ -6,24 +6,33 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioDeviceHandler
+import com.longkd.simplemediarecord.audio_recorder.playback.model.AudioDevicePair
 
 class DefaultAudioDeviceHandler(context: Context) : AudioDeviceHandler {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private var onDeviceChangedListener: ((String) -> Unit)? = null
-    private var currentDevice: String = "SPEAKER"
 
-    private val audioDeviceCallback =
-        object : AudioDeviceCallback() {
-            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
-                super.onAudioDevicesAdded(addedDevices)
-                updateAudioRouting()
-            }
+    private var onDeviceChangedListener: ((AudioDevicePair) -> Unit)? = null
+    private var onDeviceListChangedListener: ((List<AudioDevicePair>) -> Unit)? = null
 
-            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
-                super.onAudioDevicesRemoved(removedDevices)
-                updateAudioRouting()
-            }
+    private var selectedDeviceId: Int? = null
+    private var currentDevice: AudioDevicePair? = null
+
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
+            super.onAudioDevicesAdded(addedDevices)
+            updateAudioRouting()
+            notifyDeviceListChanged()
         }
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
+            super.onAudioDevicesRemoved(removedDevices)
+            if (removedDevices.any { it.id == selectedDeviceId }) {
+                selectedDeviceId = null
+            }
+            updateAudioRouting()
+            notifyDeviceListChanged()
+        }
+    }
 
     init {
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
@@ -33,116 +42,127 @@ class DefaultAudioDeviceHandler(context: Context) : AudioDeviceHandler {
         updateAudioRouting()
     }
 
-    override fun getCurrentDevice(): String = currentDevice
+    override fun getCurrentDevice(): AudioDevicePair? = currentDevice
 
-    private fun updateAudioRouting() {
-        when {
-            isHeadphonesConnected() -> {
-                routeAudioToHeadset()
-                currentDevice = "HEADSET"
-                onDeviceChangedListener?.invoke(currentDevice)
-            }
+    override fun getAvailableOutputDevices(): List<AudioDevicePair> =
+        getConnectedAudioDevices().map { it.toAudioDevicePair() }
 
-            isBluetoothDeviceConnected() -> {
-                routeAudioToBluetooth()
-                currentDevice = "BLUETOOTH"
-                onDeviceChangedListener?.invoke(currentDevice)
-            }
-
-            else -> {
-                routeAudioToSpeaker()
-                currentDevice = "SPEAKER"
-                onDeviceChangedListener?.invoke(currentDevice)
-            }
-        }
+    override fun setOnDeviceListChangedListener(listener: (List<AudioDevicePair>) -> Unit) {
+        onDeviceListChangedListener = listener
     }
 
-    override fun setOnDeviceChangedListener(listener: (String) -> Unit) {
+    override fun setOnDeviceChangedListener(listener: (AudioDevicePair) -> Unit) {
         onDeviceChangedListener = listener
+    }
+
+    override fun selectAudioDevice(deviceId: Int): Boolean {
+        val selected = getConnectedAudioDevices().find { it.id == deviceId } ?: return false
+
+        selectedDeviceId = deviceId
+        routeAudioToDevice(selected)
+        currentDevice = selected.toAudioDevicePair()
+        currentDevice?.let { onDeviceChangedListener?.invoke(it) }
+
+        return true
+    }
+
+    override fun resetDeviceSelection() {
+        selectedDeviceId = null
+        updateAudioRouting()
     }
 
     override fun release() {
         audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
     }
 
-    private fun routeAudioToHeadset() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-            val headsetDevice = devices.firstOrNull {
-                it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
-                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
-            }
-
-            headsetDevice?.let { device ->
-                audioManager.setCommunicationDevice(device)
-            }
-        } else {
-            // For older Android versions
-            audioManager.mode = AudioManager.MODE_NORMAL
-
-            @Suppress("DEPRECATION")
-            audioManager.isSpeakerphoneOn = false
-            @Suppress("DEPRECATION")
-            audioManager.isBluetoothScoOn = false
-        }
-    }
-
-    private fun routeAudioToBluetooth() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-            val bluetoothDevice = devices.firstOrNull {
-                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-                        it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-            }
-
-            bluetoothDevice?.let { device ->
-                audioManager.setCommunicationDevice(device)
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager.isBluetoothScoOn = true
-
-            @Suppress("DEPRECATION")
-            audioManager.startBluetoothSco()
-        }
-    }
-
-    private fun routeAudioToSpeaker() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-            val speakerDevice = devices.firstOrNull {
-                it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
-            }
-
-            speakerDevice?.let { device ->
-                audioManager.setCommunicationDevice(device)
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager.isSpeakerphoneOn = true
-
-            @Suppress("DEPRECATION")
-            audioManager.isBluetoothScoOn = false
-        }
-    }
-
-    private fun isHeadphonesConnected(): Boolean {
+    private fun updateAudioRouting() {
         val devices = getConnectedAudioDevices()
-        return devices.any {
-            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
-                    it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+        val selected = selectedDeviceId?.let { id -> devices.find { it.id == id } }
+
+        val routedDevice = when {
+            selected != null -> selected
+            devices.any { it.isHeadset() } -> devices.first { it.isHeadset() }
+            devices.any { it.isBluetooth() } -> devices.first { it.isBluetooth() }
+            else -> devices.firstOrNull { it.isSpeaker() }
+        }
+
+        routedDevice?.let {
+            routeAudioToDevice(it)
+            currentDevice = it.toAudioDevicePair()
+            currentDevice?.let { pair -> onDeviceChangedListener?.invoke(pair) }
         }
     }
 
-    private fun isBluetoothDeviceConnected(): Boolean {
-        val devices = getConnectedAudioDevices()
-        return devices.any {
-            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+    private fun notifyDeviceListChanged() {
+        onDeviceListChangedListener?.invoke(getAvailableOutputDevices())
+    }
+
+    private fun getConnectedAudioDevices(): List<AudioDeviceInfo> =
+        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).toList().filter { device ->
+            when (device.type) {
+                AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
+                AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> true
+
+                else -> false
+            }
+        }
+
+    private fun routeAudioToDevice(device: AudioDeviceInfo) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            audioManager.setCommunicationDevice(device)
+        } else {
+            @Suppress("DEPRECATION")
+            when {
+                device.isHeadset() -> {
+                    audioManager.isSpeakerphoneOn = false
+                    audioManager.isBluetoothScoOn = false
+                }
+
+                device.isBluetooth() -> {
+                    audioManager.isBluetoothScoOn = true
+                    audioManager.startBluetoothSco()
+                }
+
+                device.isSpeaker() -> {
+                    audioManager.isSpeakerphoneOn = true
+                    audioManager.isBluetoothScoOn = false
+                }
+            }
         }
     }
 
-    private fun getConnectedAudioDevices(): List<AudioDeviceInfo> {
-        return audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).toList()
+    private fun AudioDeviceInfo.toAudioDevicePair(): AudioDevicePair {
+        val typeName = when (type) {
+            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "SPEAKER"
+            AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "HEADSET"
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "BLUETOOTH"
+            else -> "OTHER"
+        }
+
+        val name =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && !productName.isNullOrBlank()) {
+                productName.toString()
+            } else {
+                when (typeName) {
+                    "SPEAKER" -> "Speaker"
+                    "HEADSET" -> "Headphones"
+                    "BLUETOOTH" -> "Bluetooth"
+                    else -> "Audio Device"
+                }
+            }
+
+        return AudioDevicePair(this, typeName, name)
     }
+
+    private fun AudioDeviceInfo.isHeadset(): Boolean =
+        type == AudioDeviceInfo.TYPE_WIRED_HEADSET || type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+
+    private fun AudioDeviceInfo.isBluetooth(): Boolean =
+        type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+
+    private fun AudioDeviceInfo.isSpeaker(): Boolean =
+        type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
 }
