@@ -1,11 +1,10 @@
 package com.longkd.simplemediarecord.audio_recorder.recorder.di
 
 import android.content.Context
+import com.longkd.simplemediarecord.audio_recorder.recorder.AudioInputDeviceHandler
 import com.longkd.simplemediarecord.audio_recorder.recorder.DefaultAudioRecorderFactory
-import com.longkd.simplemediarecord.audio_recorder.recorder.DefaultCallStateHandler
 import com.longkd.simplemediarecord.audio_recorder.recorder.DefaultTimerHandler
 import com.longkd.simplemediarecord.audio_recorder.recorder.itf.AudioRecorderFactory
-import com.longkd.simplemediarecord.audio_recorder.recorder.itf.CallStateHandler
 import com.longkd.simplemediarecord.audio_recorder.recorder.itf.TimerHandler
 import dagger.Module
 import dagger.Provides
@@ -20,12 +19,6 @@ import javax.inject.Singleton
 object AudioRecorderModule {
     @Provides
     @Singleton
-    fun provideCallStateHandler(@ApplicationContext context: Context): CallStateHandler {
-        return DefaultCallStateHandler(context)
-    }
-
-    @Provides
-    @Singleton
     fun provideTimerHandler(): TimerHandler {
         return DefaultTimerHandler()
     }
@@ -38,6 +31,11 @@ object AudioRecorderModule {
     ): AudioRecorderFactory {
         return DefaultAudioRecorderFactory(context, audioFilePath)
     }
+
+    @Provides
+    @Singleton
+    fun provideAudioInputDeviceHandler(@ApplicationContext context: Context) =
+        AudioInputDeviceHandler(context)
 
     @Provides
     @Named("audioFilePath")

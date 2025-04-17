@@ -16,8 +16,7 @@ class RecPermissionManager @Inject constructor() {
         activity: FragmentActivity
     ): Boolean = suspendCancellableCoroutine {
         val permissionsToGet = mutableListOf(
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.READ_PHONE_STATE
+            Manifest.permission.RECORD_AUDIO
         )
 
         PermissionX.init(activity)

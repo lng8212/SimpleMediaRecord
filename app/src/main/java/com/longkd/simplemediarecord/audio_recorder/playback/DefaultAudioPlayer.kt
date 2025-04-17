@@ -3,8 +3,8 @@ package com.longkd.simplemediarecord.audio_recorder.playback
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
+import com.longkd.simplemediarecord.audio_recorder.AudioFocusHandler
 import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioDeviceHandler
-import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioFocusHandler
 import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioPlayer
 import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioPlayerCallback
 import javax.inject.Inject
@@ -33,7 +33,7 @@ class DefaultAudioPlayer @Inject constructor(
                 setDataSource(filePath)
                 setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
                 )

@@ -1,6 +1,6 @@
 package com.longkd.simplemediarecord
 
-import com.longkd.simplemediarecord.audio_recorder.playback.model.AudioDevicePair
+import com.longkd.simplemediarecord.audio_recorder.model.AudioDevicePair
 
 sealed interface RecorderUiState {
     data object Idle : RecorderUiState

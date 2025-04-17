@@ -1,6 +1,4 @@
-package com.longkd.simplemediarecord.audio_recorder.playback.itf
-
-import com.longkd.simplemediarecord.audio_recorder.AudioManager
+package com.longkd.simplemediarecord.audio_recorder
 
 interface AudioFocusHandler : AudioManager {
     fun requestAudioFocus(): Boolean

@@ -1,4 +1,4 @@
-package com.longkd.simplemediarecord.audio_recorder.playback.model
+package com.longkd.simplemediarecord.audio_recorder.model
 
 import android.media.AudioDeviceInfo
 

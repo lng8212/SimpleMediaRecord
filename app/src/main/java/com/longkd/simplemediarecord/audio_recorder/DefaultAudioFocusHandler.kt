@@ -1,11 +1,10 @@
-package com.longkd.simplemediarecord.audio_recorder.playback
+package com.longkd.simplemediarecord.audio_recorder
 
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
-import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioFocusHandler
 
 class DefaultAudioFocusHandler(context: Context) : AudioFocusHandler {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -17,8 +16,8 @@ class DefaultAudioFocusHandler(context: Context) : AudioFocusHandler {
             AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
                 )
                 .setAcceptsDelayedFocusGain(true)
@@ -45,7 +44,7 @@ class DefaultAudioFocusHandler(context: Context) : AudioFocusHandler {
             @Suppress("DEPRECATION")
             audioManager.requestAudioFocus(
                 afChangeListener,
-                AudioManager.STREAM_MUSIC,
+                AudioManager.MODE_IN_COMMUNICATION,
                 AudioManager.AUDIOFOCUS_GAIN
             )
         }

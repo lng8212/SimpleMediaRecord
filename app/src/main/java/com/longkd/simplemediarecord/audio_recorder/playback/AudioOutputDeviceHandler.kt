@@ -6,10 +6,10 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.MediaRouter
 import android.os.Build
+import com.longkd.simplemediarecord.audio_recorder.model.AudioDevicePair
 import com.longkd.simplemediarecord.audio_recorder.playback.itf.AudioDeviceHandler
-import com.longkd.simplemediarecord.audio_recorder.playback.model.AudioDevicePair
 
-class DefaultAudioDeviceHandler(private val context: Context) : AudioDeviceHandler {
+class AudioOutputDeviceHandler(private val context: Context) : AudioDeviceHandler {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
     private var onDeviceChangedListener: ((AudioDevicePair) -> Unit)? = null
@@ -45,7 +45,7 @@ class DefaultAudioDeviceHandler(private val context: Context) : AudioDeviceHandl
 
     override fun getCurrentDevice(): AudioDevicePair? = currentDevice
 
-    override fun getAvailableOutputDevices(): List<AudioDevicePair> =
+    override fun getAvailableDevices(): List<AudioDevicePair> =
         getConnectedAudioDevices().map { it.toAudioDevicePair() }
 
     override fun setOnDeviceListChangedListener(listener: (List<AudioDevicePair>) -> Unit) {
@@ -56,7 +56,7 @@ class DefaultAudioDeviceHandler(private val context: Context) : AudioDeviceHandl
         onDeviceChangedListener = listener
     }
 
-    override fun selectAudioDevice(deviceId: Int): Boolean {
+    override fun selectDevice(deviceId: Int): Boolean {
         val selected = getConnectedAudioDevices().find { it.id == deviceId } ?: return false
 
         selectedDeviceId = deviceId
@@ -95,7 +95,7 @@ class DefaultAudioDeviceHandler(private val context: Context) : AudioDeviceHandl
     }
 
     private fun notifyDeviceListChanged() {
-        onDeviceListChangedListener?.invoke(getAvailableOutputDevices())
+        onDeviceListChangedListener?.invoke(getAvailableDevices())
     }
 
     private fun getConnectedAudioDevices(): List<AudioDeviceInfo> =
@@ -131,25 +131,29 @@ class DefaultAudioDeviceHandler(private val context: Context) : AudioDeviceHandl
                     }
                 }
             } else {
-                // For all non-A2DP devices, use setCommunicationDevice
                 audioManager.setCommunicationDevice(device)
             }
         } else {
             @Suppress("DEPRECATION")
             when {
-                device.isHeadset() -> {
+                device.isSpeaker() -> {
+                    audioManager.mode = AudioManager.MODE_NORMAL
+                    audioManager.isSpeakerphoneOn = true
+                }
+
+                device.isEarpiece() -> {
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
                     audioManager.isSpeakerphoneOn = false
-                    audioManager.isBluetoothScoOn = false
+                }
+
+                device.isHeadset() -> {
+                    audioManager.mode = AudioManager.MODE_NORMAL
+                    audioManager.isSpeakerphoneOn = false
                 }
 
                 device.isBluetooth() -> {
-                    audioManager.isBluetoothScoOn = true
                     audioManager.startBluetoothSco()
-                }
-
-                device.isSpeaker() -> {
-                    audioManager.isSpeakerphoneOn = true
-                    audioManager.isBluetoothScoOn = false
+                    audioManager.isBluetoothScoOn = true
                 }
             }
         }
@@ -186,4 +190,8 @@ class DefaultAudioDeviceHandler(private val context: Context) : AudioDeviceHandl
 
     private fun AudioDeviceInfo.isSpeaker(): Boolean =
         type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+
+    private fun AudioDeviceInfo.isEarpiece(): Boolean =
+        type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
 }
+

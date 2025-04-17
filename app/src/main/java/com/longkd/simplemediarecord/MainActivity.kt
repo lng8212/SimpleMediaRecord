@@ -48,9 +48,11 @@ class MainActivity : AppCompatActivity() {
                             binding.ivStop.visibility = View.INVISIBLE
                             binding.tvTimer.visibility = View.INVISIBLE
                             binding.clOutput.visibility = View.VISIBLE
+                            binding.tvDevices.visibility = View.INVISIBLE
                         }
 
                         RecorderUiState.Recording -> {
+                            binding.tvDevices.visibility = View.VISIBLE
                             binding.ivPlay.setImageResource(R.drawable.ic_pause)
                             binding.ivStop.visibility = View.VISIBLE
                             binding.tvTimer.visibility = View.VISIBLE
@@ -94,15 +96,21 @@ class MainActivity : AppCompatActivity() {
             }
 
             launch {
-                viewModel.availableAudioDevices.collectLatest { devices ->
+                viewModel.availableOutputAudioDevices.collectLatest { devices ->
                     spAdapter.clear()
                     spAdapter.addAll(devices.map { it.deviceName + "(${it.deviceInfo.type})" })
                     spAdapter.notifyDataSetChanged()
-                    val currentId = viewModel.getCurrentDevice()?.id
+                    val currentId = viewModel.getCurrentOutDevice()?.id
                     val selectedIndex = devices.indexOfFirst { it.id == currentId }
                     if (selectedIndex != -1) {
                         binding.spListDevices.setSelection(selectedIndex)
                     }
+                }
+            }
+
+            launch {
+                viewModel.currentInputDevices.collect {
+                    binding.tvDevices.text = "Recording through: ${it?.deviceName ?: "Unknown"}"
                 }
             }
         }
@@ -114,6 +122,7 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupView() {
+        //output
         spAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item)
         spAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.spListDevices.apply {
@@ -125,8 +134,9 @@ class MainActivity : AppCompatActivity() {
                     position: Int,
                     id: Long
                 ) {
-                    val selectedId = viewModel.availableAudioDevices.value.getOrNull(position)?.id
-                    selectedId?.let { viewModel.selectAudioDevice(it) }
+                    val selectedId =
+                        viewModel.availableOutputAudioDevices.value.getOrNull(position)?.id
+                    selectedId?.let { viewModel.selectAudioOutputDevice(it) }
                 }
 
                 override fun onNothingSelected(parent: AdapterView<*>?) {}

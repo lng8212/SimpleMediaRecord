@@ -2,8 +2,8 @@ package com.longkd.simplemediarecord
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.longkd.simplemediarecord.audio_recorder.model.AudioDevicePair
 import com.longkd.simplemediarecord.audio_recorder.playback.AudioPlayerController
-import com.longkd.simplemediarecord.audio_recorder.playback.model.AudioDevicePair
 import com.longkd.simplemediarecord.audio_recorder.recorder.AudioRecorderController
 import com.longkd.simplemediarecord.util.millisecondsToStopwatchString
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,27 +35,35 @@ class MainActivityViewModel @Inject constructor(
     private val _playbackUiState = MutableStateFlow(PlaybackUiState())
     val playbackUiState = _playbackUiState.asStateFlow()
 
-    private val _availableAudioDevices = MutableStateFlow<List<AudioDevicePair>>(emptyList())
-    val availableAudioDevices: StateFlow<List<AudioDevicePair>> = _availableAudioDevices
+    private val _availableOutputAudioDevices = MutableStateFlow<List<AudioDevicePair>>(emptyList())
+    val availableOutputAudioDevices: StateFlow<List<AudioDevicePair>> = _availableOutputAudioDevices
+
+    private val _currentInputDevices = MutableStateFlow<AudioDevicePair?>(null)
+    val currentInputDevices = _currentInputDevices.asStateFlow()
 
     private var progressJob: Job? = null
 
     init {
         updateDeviceChange()
         updateListDeviceSelected()
+        audioRecorderController.setOnCurrentDeviceChange {
+            _currentInputDevices.value = it
+        }
     }
 
     fun updateListDeviceSelected() {
         audioPlayerController.setOnDeviceListChangedListener {
-            _availableAudioDevices.value = it
+            _availableOutputAudioDevices.value = it
         }
     }
 
-    fun getCurrentDevice() = audioPlayerController.getCurrentDevice()
+    fun getCurrentOutDevice() = audioPlayerController.getCurrentDevice()
 
-    fun selectAudioDevice(deviceId: Int): Boolean {
+
+    fun selectAudioOutputDevice(deviceId: Int): Boolean {
         return audioPlayerController.selectAudioDevice(deviceId)
     }
+
 
     private fun mapState(state: AudioRecorderController.State): RecorderUiState {
         return when (state) {
